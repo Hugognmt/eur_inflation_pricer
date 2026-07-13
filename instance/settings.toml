@@ -1,0 +1,10 @@
+# EUR inflation desk - minimal settings.
+# Edit these freely; config.py reads this file at import time.
+
+[app]
+title = "EUR Inflation Desk"
+timezone = "Europe/Paris"
+
+[data]
+# Default history window (in calendar days) used by the CPI / swaps tabs.
+default_lookback_days = 30
