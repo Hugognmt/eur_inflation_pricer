@@ -8,3 +8,14 @@ timezone = "Europe/Paris"
 [data]
 # Default history window (in calendar days) used by the CPI / swaps tabs.
 default_lookback_days = 30
+
+[export]
+# Where the loaded desk data is written as CSV for the pricers (linker pricer...).
+# Relative to the project root, or an absolute path (e.g. the DatasToImport share).
+dir = "exports"
+
+[paths]
+# UNC share holding the KDB export/close files (Excel Params "Path" rows).
+# Left empty here on purpose (internal path); set it locally on the desk, e.g.
+# kdb_dir = "\\\\host\\FR\\GBM\\FR01477\\pubbonds\\William\\HistoDatas\\KDB"
+kdb_dir = ""

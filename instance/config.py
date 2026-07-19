@@ -29,6 +29,28 @@ APP_TITLE = SETTINGS.get("app", {}).get("title", "EUR Inflation Desk")
 TIMEZONE = SETTINGS.get("app", {}).get("timezone", "Europe/Paris")
 DEFAULT_LOOKBACK_DAYS = int(SETTINGS.get("data", {}).get("default_lookback_days", 30))
 
+# Where loaded data is saved as CSV for the pricers, and the target file names
+# (mirrors the Excel "DatasToImport" paths). dataset key -> CSV file name.
+EXPORT_DIR = SETTINGS.get("export", {}).get("dir", "exports")
+EXPORT_FILES = {
+    "BondDefInfla": "BondDefInfla.csv",
+    "BondDefNominals": "BondDefNominals.csv",
+    "CpiMatrix": "CpiMatrix.csv",
+    "InfSwaps": "InfSwaps.csv",
+    "EurLinkers": "EurLinkers.csv",
+    "EurBonds": "EurBonds.csv",
+}
+
+# UNC share holding the KDB export/close files (Excel Params "Path" rows).
+# Set in settings.toml [paths].kdb_dir; empty means "not configured".
+KDB_DIR = SETTINGS.get("paths", {}).get("kdb_dir", "")
+KDB_FILES = {
+    "EUR_CLOSE_LINKERS": "KDBexportLastLinkersClose.csv",
+    "EUR_CLOSE_BONDS": "KDBexportLastBondsClose.csv",
+    "KDB_LINKERS": "KDBexportLastLinkers.csv",
+    "KDB_BONDS": "KDBexportLastBonds.csv",
+}
+
 # ---------------------------------------------------------------------------
 # Params sheet (mirrors the orange/blue config blocks in the Excel "Params").
 # MVP wires Bloomberg only; the other feeds are shown for parity, wired later.

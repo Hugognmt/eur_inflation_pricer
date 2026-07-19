@@ -31,6 +31,7 @@ from instance import (  # noqa: E402
     tab_inflation_swaps,
     tab_eur_linkers_monitor,
     tab_eur_bonds_monitor,
+    refresh,
 )
 
 
@@ -64,17 +65,32 @@ def _top_controls(provider) -> None:
 def _workflow(provider) -> None:
     """The Excel "Export" sheet: 5 sequential steps, each stamping a run time."""
     st.markdown("**Export workflow**")
-    runs = st.session_state.setdefault("runs", {})
+    # Same size for every step button, and a light-orange look.
+    n = len(config.WORKFLOW_STEPS)
+    sel = ",".join(f".st-key-step_{i} button" for i in range(n))
+    sel_hover = ",".join(f".st-key-step_{i} button:hover" for i in range(n))
+    st.markdown(
+        f"<style>"
+        f"{sel}{{height:4.5em;white-space:normal;"
+        f"background-color:#FFD9A0;color:#7a4e00;border:1px solid #E8A44D;}}"
+        f"{sel_hover}{{background-color:#FFC670;color:#5a3800;border-color:#D98B2B;}}"
+        f"</style>",
+        unsafe_allow_html=True,
+    )
+    # No st.session_state: a click renders its result inline in the same run.
+    clicked = None
     cols = st.columns(len(config.WORKFLOW_STEPS))
     for i, (col, step) in enumerate(zip(cols, config.WORKFLOW_STEPS)):
         with col:
             if st.button(step, width="stretch", key=f"step_{i}"):
-                runs[step] = _now_str()
-                if i == 0:  # "Refresh BBG" also drops any cached data
-                    st.cache_data.clear()
-                st.toast(f"{step} — ran (MVP stub)")
-            st.caption(runs.get(step, "not run yet"))
+                clicked = i
     st.caption("Dynamic-time snapshots: " + " · ".join(config.SNAPSHOT_TIMES))
+
+    if clicked == 0:
+        # (1) Refresh BBG (if opened o/n): reload market datasets for the new day.
+        refresh.render(provider)
+    elif clicked is not None:
+        st.info(f"{config.WORKFLOW_STEPS[clicked]} — not wired yet (MVP stub).")
     # TODO(workspace): wire steps 3-5 to KDB export/import and close import.
 
 

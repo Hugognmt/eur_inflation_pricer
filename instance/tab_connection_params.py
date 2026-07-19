@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 
-from instance import config
+from instance import config, exports
 
 
 def render(provider) -> None:
@@ -67,5 +67,47 @@ def render(provider) -> None:
         width="stretch",
     )
 
+    _render_exports(provider)
+
     # TODO(workspace): source feed flags, ESTR fixing and histo paths from
     # Workspace / KDB once those providers exist.
+
+
+def _render_exports(provider) -> None:
+    """CSV exports feeding the pricers (linker pricer, ...) — Excel DatasToImport."""
+    st.divider()
+    st.markdown("**Exports CSV (pour les pricers)**")
+
+    out_dir = exports.resolved_dir()
+    st.caption(f"Dossier de sortie : `{out_dir}` — éditable dans `instance/settings.toml`.")
+
+    data = exports.collect(provider)
+    refs = pd.DataFrame(
+        [
+            {
+                "Dataset": key,
+                "Fichier": config.EXPORT_FILES[key],
+                "Lignes": len(df),
+                "Chemin cible": str(out_dir / config.EXPORT_FILES[key]),
+            }
+            for key, df in data.items()
+        ]
+    )
+    st.dataframe(refs, hide_index=True, width="stretch")
+
+    if st.button("💾 Sauvegarder tout en CSV", width="stretch"):
+        written = exports.write_all(data)
+        st.success(f"{len(written)} fichier(s) écrits dans {out_dir}")
+
+    st.caption("Ou télécharger un fichier directement :")
+    cols = st.columns(len(data))
+    for col, (key, df) in zip(cols, data.items()):
+        with col:
+            st.download_button(
+                config.EXPORT_FILES[key],
+                exports.to_csv_bytes(df),
+                file_name=config.EXPORT_FILES[key],
+                mime="text/csv",
+                width="stretch",
+                key=f"dl_{key}",
+            )
