@@ -16,6 +16,13 @@ import pandas as pd
 try:
     from xbbg import blp
     _XBBG_AVAILABLE = True
+    # Pin the pandas backend: this xbbg build defaults to pyarrow, which here
+    # demands pyarrow >= 22 (only 21 is installed) and fails every call. We
+    # return pandas DataFrames anyway, so pandas is the right backend.
+    try:
+        blp.set_backend("pandas")
+    except Exception:
+        pass
 except Exception:  # xbbg missing or import-time failure
     blp = None
     _XBBG_AVAILABLE = False
@@ -27,6 +34,15 @@ _BBG_PORT = 8194
 
 class BloombergProvider:
     def __init__(self) -> None:
+        self.recheck()
+
+    def recheck(self) -> bool:
+        """(Re-)probe the terminal and refresh availability + message.
+
+        Called at construction and whenever the UI asks to reconnect, so a
+        terminal that comes up after the app started is picked up without a
+        full server restart.
+        """
         self._available = _XBBG_AVAILABLE and self._probe()
         if not _XBBG_AVAILABLE:
             self.message = "Bloomberg unavailable: xbbg not installed."
@@ -37,6 +53,7 @@ class BloombergProvider:
             )
         else:
             self.message = "Bloomberg (xbbg) connected."
+        return self._available
 
     @staticmethod
     def _probe() -> bool:
@@ -58,6 +75,27 @@ class BloombergProvider:
             return blp.bdp(tickers=tickers, flds=fields)
         except Exception as exc:
             self.message = f"Bloomberg snapshot failed: {exc}"
+            return pd.DataFrame()
+
+    def get_bql(self, expression) -> pd.DataFrame:
+        """Run a Bloomberg Query Language (BQL) expression.
+
+        Used to rebuild the bond universe (the workbook's "Refresh BBG" step):
+        one row per security, columns ``id`` + one per requested field. Returns
+        an empty DataFrame when Bloomberg is unavailable or the query fails, so
+        callers can fall back to the static config universe.
+        """
+        if not self._available or not expression:
+            return pd.DataFrame()
+        try:
+            result = blp.bql(expression)
+            # xbbg's bql return type is loosely typed (Any); it is a pandas
+            # DataFrame at runtime, but normalise defensively either way.
+            if isinstance(result, pd.DataFrame):
+                return result
+            return pd.DataFrame(result)
+        except Exception as exc:
+            self.message = f"Bloomberg BQL failed: {exc}"
             return pd.DataFrame()
 
     def get_history(self, tickers, field, start_date, end_date) -> pd.DataFrame:

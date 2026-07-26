@@ -111,6 +111,84 @@ LINKER_NOMINAL_PAIRS = [
     ("BTPe_May-30_0.4", "BTP_Apr-30_1.35"),
 ]
 
+# ---------------------------------------------------------------------------
+# BQL retrieval of the live bond universe (the workbook's "Refresh BBG" step).
+#
+# Before filling per-bond fields, the desk workbook rebuilds its bond lists
+# from Bloomberg with three BQL blocks. We replicate them 1:1:
+#   1) linkers carrying a REFERENCE_INDEX (OAT€i / OATi / Bund€i)
+#   2) linkers carrying a SERIES         (BTP€i — Italian linkers)
+#   3) the nominal comparator universe   (OAT / BUND / BTP nominals)
+#
+# Each `for(<...>)` clause is a live BQL screen built with filter(bondsuniv()).
+# The predicates below are Bloomberg BQL data items and are meant to be tuned
+# by the desk — edit the country lists / flags to match your terminal's field
+# library if a query errors or returns the wrong set.
+# ---------------------------------------------------------------------------
+
+# Country ISO codes per role, reused to assemble the universe filters.
+BQL_LINKER_REF_COUNTRIES = ["FR", "DE"]    # linkers exposing REFERENCE_INDEX
+BQL_LINKER_SERIES_COUNTRIES = ["IT"]       # linkers exposing SERIES (BTP€i)
+BQL_NOMINAL_COUNTRIES = ["FR", "DE", "IT"]  # nominal comparator universe
+
+
+def _bql_str_list(values) -> str:
+    """['FR','DE'] -> \"['FR', 'DE']\" for embedding in a BQL predicate."""
+    return "[" + ", ".join(f"'{v}'" for v in values) + "]"
+
+
+# The `for(<...>)` universe of each BQL block. Editable filter() screens.
+BQL_UNIVERSES = {
+    "LINKER_UNIVERSE_WITH_REFERENCE_INDEX": (
+        "filter(bondsuniv('ACTIVE'), "
+        "inflation_linked_indicator()=='Y' and "
+        f"cntry() in {_bql_str_list(BQL_LINKER_REF_COUNTRIES)})"
+    ),
+    "LINKER_UNIVERSE_WITH_SERIES": (
+        "filter(bondsuniv('ACTIVE'), "
+        "inflation_linked_indicator()=='Y' and "
+        f"cntry() in {_bql_str_list(BQL_LINKER_SERIES_COUNTRIES)})"
+    ),
+    "NOMINAL_BOND_UNIVERSE": (
+        "filter(bondsuniv('ACTIVE'), "
+        "inflation_linked_indicator()=='N' and "
+        "payment_rank()=='Senior Unsecured' and "
+        f"cntry() in {_bql_str_list(BQL_NOMINAL_COUNTRIES)})"
+    ),
+}
+
+# get() field list per block (exactly the fields shown in the workbook queries).
+# 'groupsort(maturity,order=asc)' keeps the maturity-ascending order.
+_BQL_COMMON_TAIL = ["CPN", "TICKER", "GREEN_BOND_LOAN_INDICATOR",
+                    "CPN_FREQ", "AMT_OUTSTANDING"]
+BQL_QUERIES = {
+    "linkers_reference_index": {
+        "universe": "LINKER_UNIVERSE_WITH_REFERENCE_INDEX",
+        "fields": ["ID_ISIN", "REFERENCE_INDEX", *_BQL_COMMON_TAIL],
+    },
+    "linkers_series": {
+        "universe": "LINKER_UNIVERSE_WITH_SERIES",
+        "fields": ["ID_ISIN", "SERIES", *_BQL_COMMON_TAIL],
+    },
+    "nominals": {
+        "universe": "NOMINAL_BOND_UNIVERSE",
+        "fields": ["ID_ISIN", *_BQL_COMMON_TAIL],
+    },
+}
+
+
+def build_bql_query(key: str) -> str:
+    """Assemble the full BQL string for one block, e.g. 'linkers_reference_index'.
+
+    Mirrors the workbook:
+        get(groupsort(maturity,order=asc),<fields>) for(<universe>)
+    """
+    spec = BQL_QUERIES[key]
+    fields = ",".join(spec["fields"])
+    universe = BQL_UNIVERSES[spec["universe"]]
+    return f"get(groupsort(maturity,order=asc),{fields}) for({universe})"
+
+
 # CPI / HICP reference indices (Bloomberg). Editable placeholders.
 CPI_TICKERS = [
     "CPTFEMU Index",   # Euro area HICP ex-tobacco (linker reference)

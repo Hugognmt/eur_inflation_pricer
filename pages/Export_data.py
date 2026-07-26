@@ -59,6 +59,11 @@ def _top_controls(provider) -> None:
         st.write("")  # small vertical nudge to align the button
         if st.button("Refresh", width="stretch"):
             st.cache_data.clear()
+            # Rebuild the provider so a Bloomberg session that came up after the
+            # app started is re-probed and flips the status to connected. The
+            # cached provider's one-time probe would otherwise stay stale, and
+            # clearing the resource cache also survives code reloads.
+            st.cache_resource.clear()
             st.rerun()
 
 

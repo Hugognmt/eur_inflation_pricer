@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from instance import config, exports
+from instance import bql_bonds, config, exports
 from instance.impersonation import CurrentUserImpersonate
 
 _MARKER = ".last_refresh"
@@ -106,7 +106,12 @@ def _row(dataset, status, source_path, rows, message, ts) -> dict:
 
 
 def _reload_market(provider, ts: str) -> list:
-    """INF_SWAPS from Bloomberg; EUR_LINKERS / EUR_BONDS from config (+ BBG later)."""
+    """INF_SWAPS from Bloomberg; linker/nominal universes rebuilt via BQL.
+
+    Mirrors the workbook's "Refresh BBG": re-pull the inflation-linked and
+    nominal bond names from Bloomberg (BQL), falling back to the static config
+    universe when the terminal is unavailable.
+    """
     results = []
 
     swaps = provider.get_snapshot(config.INFLATION_SWAP_TICKERS, ["PX_LAST"])
@@ -117,13 +122,21 @@ def _reload_market(provider, ts: str) -> list:
         results.append(_row("INF_SWAPS", "unavailable", "Bloomberg (EUSWI* Curncy)",
                             0, provider.message, ts))
 
-    linkers = pd.DataFrame(config.linker_bonds())
-    results.append(_row("EUR_LINKERS", "reloaded", "config.LINKER_NOMINAL_PAIRS",
-                        len(linkers), "Reloaded linker universe", ts))
+    linkers, lk_src = bql_bonds.load_linkers(provider)
+    results.append(_row(
+        "EUR_LINKERS",
+        "reloaded" if lk_src.startswith("Bloomberg") else "fallback",
+        lk_src, len(linkers),
+        "Rebuilt linker names via BQL" if lk_src.startswith("Bloomberg")
+        else "BQL unavailable — static config universe", ts))
 
-    bonds = pd.DataFrame(config.nominal_bonds())
-    results.append(_row("EUR_BONDS", "reloaded", "config.LINKER_NOMINAL_PAIRS",
-                        len(bonds), "Reloaded nominal universe", ts))
+    bonds, nm_src = bql_bonds.load_nominals(provider)
+    results.append(_row(
+        "EUR_BONDS",
+        "reloaded" if nm_src.startswith("Bloomberg") else "fallback",
+        nm_src, len(bonds),
+        "Rebuilt nominal names via BQL" if nm_src.startswith("Bloomberg")
+        else "BQL unavailable — static config universe", ts))
     return results
 
 
